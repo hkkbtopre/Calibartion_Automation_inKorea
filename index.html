@@ -76,6 +76,9 @@ h2{font-size:22px;margin:0;letter-spacing:-.03em;font-weight:700}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--ink2);margin-top:10px}
 .legend span{display:inline-flex;align-items:center;gap:5px}
 .legend i{width:9px;height:9px;border-radius:50%}.legend i.ln{width:14px;height:2px;border-radius:1px}
+.legend i.ring{background:var(--surface);border:1.5px solid var(--ink2);width:8px;height:8px}
+.legend + .legend{margin-top:6px}
+.tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
 .pair{display:grid;grid-template-columns:1fr 1fr;gap:22px}
 @media (max-width:560px){.pair{grid-template-columns:1fr}}
 .sub{font-size:12px;color:var(--ink2);margin:0 0 6px}
@@ -148,9 +151,10 @@ function 뼈대() {
       <div class="stats"><div><span>누적 배정</span><b data-k="누적"></b></div><div><span>손실</span><b data-k="손실"></b></div><div><span>최선해 갱신</span><b data-k="최선"></b></div></div>
     </div>
     <div class="card">
-      <div class="ch"><h3>노선 지도</h3><span class="seg"><button class="on" data-m="승">승차</button><button data-m="하">하차</button></span></div>
+      <div class="ch"><h3>노선 지도</h3><span class="tools"><span class="seg" data-k="lay"><button class="on">커넥터</button></span><span class="seg" data-k="mode"><button class="on" data-m="승">승차</button><button data-m="하">하차</button></span></span></div>
       <div class="map" id="map-${r}"></div>
       <div class="legend"><span><i style="background:var(--mid)"></i>±10% 안</span><span><i style="background:var(--pos)"></i>과대 (+)</span><span><i style="background:var(--neg)"></i>과소 (−)</span><span>원 크기 = 오차 크기</span></div>
+      <div class="legend" data-k="lg2"><span><i class="ring"></i>존 중심</span><span><i class="ln" style="background:var(--line)"></i>존 커넥터</span><span><i class="ln" data-k="lg930"></i><span data-k="lg930t"></span></span><span>진하고 굵을수록 가중치 낮음 = 더 이용</span></div>
     </div>
     <div class="card">
       <div class="ch"><h3>수렴 추이</h3><span class="chip">가로축 누적 배정</span></div>
@@ -165,11 +169,14 @@ function 뼈대() {
     </div>`;
     s.querySelector("h2").textContent = r;
     main.append(s);
-    상태[r] = {모드: "승"};
-    s.querySelectorAll(".seg button").forEach(b => b.onclick = () => {
-      s.querySelectorAll(".seg button").forEach(x => x.classList.toggle("on", x === b));
+    상태[r] = {모드: "승", 커넥터: true};
+    const 모드단추 = s.querySelectorAll('[data-k="mode"] button');
+    모드단추.forEach(b => b.onclick = () => {
+      모드단추.forEach(x => x.classList.toggle("on", x === b));
       상태[r].모드 = b.dataset.m; 지도칠하기(r);
     });
+    const 층단추 = s.querySelector('[data-k="lay"] button');
+    층단추.onclick = () => { 상태[r].커넥터 = !상태[r].커넥터; 층단추.classList.toggle("on", 상태[r].커넥터); 지도칠하기(r); };
     if (window.L) {
       const m = L.map("map-" + r, {zoomControl: false, scrollWheelZoom: false, attributionControl: true});
       const 어두움 = matchMedia("(prefers-color-scheme: dark)").matches;
@@ -177,7 +184,9 @@ function 뼈대() {
         {maxZoom: 16, attribution: "Esri · OSM"}).addTo(m);
       L.control.zoom({position: "bottomright"}).addTo(m);
       m.attributionControl.setPrefix(false);
-      지도[r] = {m, 선: [], 점: []};
+      // 커넥터·존 중심은 노선·역 아래 층에 캔버스로 그린다(수천 개)
+      m.createPane("conn").style.zIndex = 380; m.createPane("zone").style.zIndex = 390;
+      지도[r] = {m, 선: [], 점: [], 그림: L.canvas({pane: "conn", padding: .3}), 존그림: L.canvas({pane: "zone", padding: .3}), 층: null, 키: ""};
     }
   });
 }
@@ -205,6 +214,49 @@ function 지도칠하기(r) {
     c.bindPopup(팝);
     g.점.push(c);
   });
+  커넥터칠하기(r);
+}
+
+/* 커넥터 가중치(@auxpf, 최선해). 시작값 대비 낮을수록(더 이용) 진하고 굵게: ×1/4 ~ ×4 를 0~1 로 */
+let 커넥터망 = null;
+const 세기 = (v, 시작) => Math.max(0, Math.min(1, (2 - Math.log2(v / 시작)) / 4));
+const 값글 = v => 수(v, v < 1 ? 2 : 1);
+function 팁글(제목, v, 시작) {
+  const e = el("span"); e.append(document.createTextNode(제목 + " · 가중치 "), el("b", {}, 값글(v)), document.createTextNode(` (시작 ${수(시작, 1)})`));
+  return e;
+}
+function 커넥터칠하기(r) {
+  const g = 지도[r], d = 상태[r].자료, 망 = 커넥터망 && 커넥터망[r], 값 = d && d.커넥터, 키 = 상태[r].모드;
+  const s = document.getElementById("s-" + r), 승차 = 키 === "승", 역색 = css(승차 ? "--s1" : "--s2");
+  s.querySelector('[data-k="lg930"]').style.background = 역색;
+  s.querySelector('[data-k="lg930t"]').textContent = 승차 ? "승차 커넥터" : "하차 커넥터";
+  s.querySelector('[data-k="lg2"]').classList.toggle("dim", !상태[r].커넥터);
+  s.querySelector('[data-k="lg2"]').style.display = s.querySelector('[data-k="lay"]').style.display = 망 && 값 ? "" : "none";
+  const 열쇠 = [상태[r].커넥터, 키, d && d.최선시각, !!망, !!값].join("|");
+  if (!g || g.키 === 열쇠) return;
+  g.키 = 열쇠;
+  if (g.층) { g.층.remove(); g.층 = null; }
+  if (!상태[r].커넥터 || !망 || !값) return;
+  const 층 = L.layerGroup(), 선색 = css("--line"), 칸 = 승차 ? 3 : 4, 방향 = 승차 ? "출발" : "도착";
+  망.c999.forEach(c => {
+    const k = c[칸], v = k >= 0 ? 값["999"][k] : undefined;
+    if (v === undefined) return;
+    const z = 망.존[c[0]], t = 세기(v, 4);
+    층.addLayer(L.polyline([[z[1], z[2]], [c[1], c[2]]], {renderer: g.그림, color: 선색, weight: .6 + 2.2 * t, opacity: .12 + .7 * t})
+      .bindTooltip(() => 팁글(`존 ${z[0]} ${방향} 커넥터`, v, 4), {sticky: true, className: "lbl"}));
+  });
+  const 역위치 = Object.fromEntries(d.역.map(x => [x.역, [x.위도, x.경도]]));
+  망["c930" + 키].forEach(c => {
+    const v = 값[키][c[3]], p = 역위치[c[0]];
+    if (v === undefined || !p) return;
+    const t = 세기(v, 1);
+    층.addLayer(L.polyline([[c[1], c[2]], p], {renderer: g.그림, color: 역색, weight: 1.5 + 2.5 * t, opacity: .35 + .6 * t, lineCap: "round"})
+      .bindTooltip(() => 팁글(`${c[0]} ${승차 ? "승차" : "하차"} 커넥터`, v, 1), {sticky: true, className: "lbl"}));
+  });
+  const 면 = css("--surface"), 테 = css("--ink2");
+  망.존.forEach(z => 층.addLayer(L.circleMarker([z[1], z[2]], {renderer: g.존그림, radius: 2.5, color: 테, weight: 1, fillColor: 면, fillOpacity: 1})
+    .bindTooltip(`존 ${z[0]}`, {className: "lbl"})));
+  층.addTo(g.m); g.층 = 층;
 }
 
 /* 계단선 그래프 하나(축 하나). 값들: [{이름, 색, f}] */
@@ -314,6 +366,7 @@ function 그리기(자료) {
 }
 
 async function 읽기() {
+  if (!커넥터망) fetch("connectors.json?v=1").then(r => r.ok ? r.json() : null).then(j => { if (j) { 커넥터망 = j; 권역들.forEach(지도칠하기); } }).catch(() => {});
   try {
     const r = await fetch("data.json?t=" + Date.now(), {cache: "no-store"});
     if (r.ok) 그리기(await r.json());
