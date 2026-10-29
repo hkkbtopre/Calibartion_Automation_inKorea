@@ -3,173 +3,323 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>도시철도 정산 현황</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
-:root{--bg:#f6f7f9;--card:#fff;--fg:#16181d;--mut:#6b7280;--line:#e6e8ec;--soft:#f0f2f5;
---on:#2563eb;--off:#ea7a1a;--ok:#16a34a;--okbg:#e8f6ec;--neg:#2563eb;--pos:#dc2626;--band:rgba(22,163,74,.10)}
-@media (prefers-color-scheme:dark){:root{--bg:#0f1115;--card:#171a20;--fg:#eceef2;--mut:#9aa1ad;--line:#272b33;--soft:#1e222a;
---on:#6b9cff;--off:#ff9d4d;--ok:#3ccf74;--okbg:#16301f;--neg:#6b9cff;--pos:#ff6b6b;--band:rgba(60,207,116,.13)}}
+/* 색 역할: 승차·하차(범주, 검증 통과 aqua·yellow), 과소·과대(발산, blue↔red, 가운데=회색), 상태 good */
+:root{
+  --plane:#f4f4f1;--surface:#fcfcfb;--raise:#f1f0ec;--ink:#0b0b0b;--ink2:#52514e;--mute:#898781;
+  --grid:#e1e0d9;--axis:#c3c2b7;--ring:rgba(11,11,11,.08);--shadow:0 1px 2px rgba(11,11,11,.04),0 8px 24px rgba(11,11,11,.04);
+  --s1:#1baf7a;--s2:#eda100;--neg:#2a78d6;--pos:#e34948;--mid:#c9c8c0;--good:#0ca30c;--goodtext:#006300;
+  --negwash:rgba(42,120,214,.10);--poswash:rgba(227,73,72,.10);--band:rgba(12,163,12,.07);--line:#3a3935;
+}
+@media (prefers-color-scheme:dark){:root{
+  --plane:#0d0d0d;--surface:#1a1a19;--raise:#232322;--ink:#f0efec;--ink2:#c3c2b7;--mute:#898781;
+  --grid:#2c2c2a;--axis:#383835;--ring:rgba(255,255,255,.08);--shadow:none;
+  --s1:#199e70;--s2:#c98500;--neg:#3987e5;--pos:#e66767;--mid:#55544f;--good:#0ca30c;--goodtext:#0ca30c;
+  --negwash:rgba(57,135,229,.16);--poswash:rgba(230,103,103,.16);--band:rgba(12,163,12,.10);--line:#d8d7d0;
+}}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Malgun Gothic",sans-serif;-webkit-font-smoothing:antialiased}
-header{max-width:1440px;margin:0 auto;padding:20px 20px 6px;display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}
-h1{font-size:20px;letter-spacing:-.02em;margin:0}
-.stamp{font-size:12px;color:var(--mut);display:flex;align-items:center;gap:6px}
-.dot{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px var(--okbg)}
-.dot.stale{background:var(--mut);box-shadow:none}
-main{max-width:1440px;margin:0 auto;padding:10px 20px 32px;display:grid;grid-template-columns:1fr 1fr;gap:20px}
-@media (max-width:980px){main{grid-template-columns:1fr;padding:10px 16px 28px}header{padding:16px 16px 4px}}
-section{min-width:0;display:flex;flex-direction:column;gap:12px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;min-width:0}
-.title{display:flex;align-items:baseline;justify-content:space-between}
-h2{font-size:18px;margin:0;letter-spacing:-.02em}
-.sub{font-size:12px;color:var(--mut)}
-.kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px}
-.kpi div{background:var(--soft);border-radius:10px;padding:10px 12px}
-.kpi b{display:block;font-size:24px;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.2}
-.kpi b small{font-size:13px;color:var(--mut);font-weight:500}
-.kpi span{font-size:12px;color:var(--mut)}
-.kpi .bar{height:4px;border-radius:2px;background:var(--line);margin-top:6px;overflow:hidden;padding:0}.kpi .bar i{display:block;height:100%;background:var(--ok)}
-@media (max-width:520px){.kpi{grid-template-columns:repeat(2,1fr)}}
-.h3{font-size:13px;font-weight:600;margin:0 0 8px;display:flex;justify-content:space-between;align-items:center;gap:8px}
-.seg{display:inline-flex;background:var(--soft);border-radius:8px;padding:2px}
-.seg button{border:0;background:none;color:var(--mut);font:inherit;font-size:12px;padding:4px 10px;border-radius:6px;cursor:pointer}
-.seg button.on{background:var(--card);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.08)}
-.map{height:380px;border-radius:10px;overflow:hidden;background:var(--soft)}
-.leaflet-container{font:inherit;background:var(--soft)}
-.leaflet-tooltip.lbl{background:transparent;border:0;box-shadow:none;font-size:11px;font-weight:600;color:var(--fg);padding:0;white-space:nowrap;text-shadow:0 0 3px var(--card),0 0 3px var(--card),0 0 3px var(--card)}
+html{background:var(--plane)}
+body{margin:0;color:var(--ink);font:14px/1.5 system-ui,-apple-system,"Apple SD Gothic Neo","Segoe UI","Malgun Gothic",sans-serif;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1480px;margin:0 auto;padding:28px 24px 40px}
+@media (max-width:700px){.wrap{padding:18px 16px 32px}}
+header{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+.eyebrow{font-size:12px;color:var(--mute);letter-spacing:.02em;margin-bottom:4px}
+h1{font-size:26px;line-height:1.2;letter-spacing:-.03em;margin:0;font-weight:700}
+.live{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--ink2);background:var(--surface);border:1px solid var(--ring);border-radius:999px;padding:6px 12px 6px 10px}
+.live i{width:8px;height:8px;border-radius:50%;background:var(--good);position:relative}
+.live i:after{content:"";position:absolute;inset:-4px;border-radius:50%;border:2px solid var(--good);opacity:.35;animation:pulse 2s ease-out infinite}
+.live.stale i{background:var(--mute)}.live.stale i:after{display:none}
+@keyframes pulse{0%{transform:scale(.6);opacity:.5}100%{transform:scale(1.6);opacity:0}}
+@media (prefers-reduced-motion:reduce){.live i:after{animation:none}}
+main{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}
+@media (max-width:1080px){main{grid-template-columns:minmax(0,1fr)}}
+section{display:flex;flex-direction:column;gap:14px;min-width:0}
+.card{background:var(--surface);border:1px solid var(--ring);border-radius:16px;padding:18px 20px;box-shadow:var(--shadow);min-width:0}
+@media (max-width:700px){.card{padding:16px}}
+.rhead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+.rname{display:flex;align-items:baseline;gap:10px}
+h2{font-size:22px;margin:0;letter-spacing:-.03em;font-weight:700}
+.chip{font-size:12px;color:var(--ink2)}
+.state{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink2);background:var(--raise);border-radius:999px;padding:3px 10px}
+.state b{width:6px;height:6px;border-radius:50%;background:var(--good)}
+.state.bad b{background:var(--pos)}
+.hero{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.tile{background:var(--raise);border-radius:12px;padding:14px 14px 12px}
+.tile .lab{font-size:12px;color:var(--ink2);display:flex;align-items:center;gap:6px}
+.tile .lab i{width:10px;height:3px;border-radius:2px}
+.tile .val{font-size:40px;font-weight:700;letter-spacing:-.04em;line-height:1.1;margin:4px 0 10px}
+.tile .val small{font-size:16px;font-weight:600;color:var(--mute);letter-spacing:0;margin-left:2px}
+.strip{display:flex;gap:2px}
+.strip span{flex:1;height:10px;border-radius:2px;background:var(--mid);cursor:default}
+.strip span.in{background:var(--mid)}
+.strip span.neg{background:var(--neg)}.strip span.pos{background:var(--pos)}
+.strip-ends{display:flex;justify-content:space-between;font-size:10px;color:var(--mute);margin-top:4px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px;padding-top:14px;border-top:1px solid var(--grid)}
+.stats div{min-width:0}.stats span{display:block;font-size:12px;color:var(--mute)}.stats b{font-size:17px;font-weight:600;letter-spacing:-.02em;white-space:nowrap}
+@media (max-width:520px){.tile .val{font-size:32px}}
+.ch{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.ch h3{font-size:14px;margin:0;font-weight:600;letter-spacing:-.01em}
+.seg{display:inline-flex;background:var(--raise);border-radius:9px;padding:3px}
+.seg button{border:0;background:none;color:var(--ink2);font:inherit;font-size:12px;font-weight:500;padding:5px 12px;border-radius:7px;cursor:pointer}
+.seg button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.map{height:400px;border-radius:12px;overflow:hidden;background:var(--raise);isolation:isolate}
+@media (max-width:700px){.map{height:320px}}
+.leaflet-container{font:inherit;background:var(--raise)}
+.leaflet-control-attribution{font-size:9px;background:rgba(255,255,255,.6)!important}
+.leaflet-tooltip.lbl{background:var(--surface);border:1px solid var(--ring);box-shadow:0 1px 3px rgba(0,0,0,.12);border-radius:6px;font-size:11px;color:var(--ink);padding:2px 6px;white-space:nowrap}
+.leaflet-tooltip.lbl b{font-weight:700}
 .leaflet-tooltip.lbl:before{display:none}
-.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--mut);margin-top:8px}
-.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px;vertical-align:-1px}
-.cv{display:grid;grid-template-columns:28px 1fr;gap:4px 6px}
-.yl{display:flex;flex-direction:column;justify-content:space-between;font-size:10px;color:var(--mut);text-align:right;height:120px}
-.xl{position:relative;height:16px;font-size:10px;color:var(--mut)}
-.cv .xl{grid-column:2}
-.xl span{position:absolute;transform:translateX(-50%)}.xl span:first-child{transform:none}.xl span:last-child{transform:translateX(-100%)}
-svg{display:block;overflow:visible}
-.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media (max-width:520px){.two{grid-template-columns:1fr}}
-.rows{display:grid;grid-template-columns:auto 1fr;column-gap:8px}
-.rows .n{font-size:12px;text-align:right;white-space:nowrap;height:24px;line-height:24px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--ink2);margin-top:10px}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.legend i{width:9px;height:9px;border-radius:50%}.legend i.ln{width:14px;height:2px;border-radius:1px}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+@media (max-width:560px){.pair{grid-template-columns:1fr}}
+.sub{font-size:12px;color:var(--ink2);margin:0 0 6px}
+.plot{position:relative}
+.plot svg{display:block;width:100%;overflow:visible}
+.plot text{font-size:10px;fill:var(--mute);font-variant-numeric:tabular-nums}
+.plot text.end{font-size:11px;font-weight:600;fill:var(--ink)}
+.tip{position:fixed;z-index:1000;pointer-events:none;background:var(--surface);color:var(--ink);border:1px solid var(--ring);border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.14);padding:8px 10px;font-size:12px;line-height:1.45;opacity:0;transition:opacity .12s;min-width:120px}
+.tip .t{color:var(--mute);font-size:11px;margin-bottom:2px}
+.tip .r{display:flex;align-items:center;gap:6px}.tip .r i{width:12px;height:2px;border-radius:1px}.tip .r b{font-weight:700;min-width:32px}
+details{border-top:1px solid var(--grid);margin-top:14px;padding-top:10px}
+summary{cursor:pointer;font-size:12px;color:var(--ink2);list-style:none;display:flex;align-items:center;gap:6px}
+summary::-webkit-details-marker{display:none}summary:before{content:"›";display:inline-block;transition:transform .15s;font-size:14px}
+details[open] summary:before{transform:rotate(90deg)}
+.tbl{overflow-x:auto;margin-top:8px}
 table{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
-th,td{padding:6px;text-align:right;border-bottom:1px solid var(--line)}
-th{color:var(--mut);font-weight:500;font-size:11px}thead tr:first-child th{border-bottom:0;padding-bottom:0}
-td.n{text-align:left;white-space:nowrap;font-weight:500}
-td.e{font-weight:600}td.ok{color:var(--ok)}td.pos{color:var(--pos)}td.neg{color:var(--neg)}
-.scroll{overflow-x:auto}
+th,td{padding:7px 8px;text-align:right;border-bottom:1px solid var(--grid);white-space:nowrap}
+th{color:var(--mute);font-weight:500;font-size:11px}
+td.n{text-align:left;font-weight:500}
+td.e{font-weight:600}td.e.in{color:var(--goodtext)}td.e.neg{background:var(--negwash)}td.e.pos{background:var(--poswash)}
+footer{margin-top:24px;font-size:11px;color:var(--mute);text-align:center}
+.dim{opacity:.55;transition:opacity .2s}
 </style>
 </head>
 <body>
-<header><h1>도시철도 정산 현황</h1><div class="stamp"><span class="dot" id="dot"></span><span id="stamp">불러오는 중</span></div></header>
+<div class="wrap">
+<header>
+  <div><div class="eyebrow">EMME 도시철도 자동정산 · 허용범위 ±10%</div><h1>도시철도 정산 현황</h1></div>
+  <div class="live" id="live"><i></i><span id="stamp">불러오는 중</span></div>
+</header>
 <main id="main"></main>
+<footer>지도 © OpenStreetMap · Esri · 역 위치는 망 좌표 변환값(수백 m 오차 가능)</footer>
+</div>
+<div class="tip" id="tip"></div>
 <script>
+"use strict";
 const 권역들 = ["대전", "광주"], 상태 = {}, 지도 = {};
+let 최근 = null;
 const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const 수 = (v, d = 0) => Number(v).toLocaleString("ko-KR", {maximumFractionDigits: d, minimumFractionDigits: d});
-const 부호 = v => (v > 0 ? "+" : "") + 수(v, 1);
-const 색 = (e, 허용) => Math.abs(e) <= 허용 ? css("--ok") : (e > 0 ? css("--pos") : css("--neg"));
+const 부호 = (v, d = 1) => (v > 0 ? "+" : v < 0 ? "−" : "") + 수(Math.abs(v), d);
+const 짧게 = v => v >= 1e6 ? 수(v / 1e6, 1) + "M" : v >= 1e3 ? 수(v / 1e3) + "K" : 수(v);
+const 판정 = (e, 허용) => Math.abs(e) <= 허용 ? "in" : e > 0 ? "pos" : "neg";
+const 판정색 = k => k === "in" ? css("--mid") : k === "pos" ? css("--pos") : css("--neg");
+const el = (태그, 속성 = {}, 글 = "") => { const e = document.createElement(태그); Object.assign(e, 속성); if (글) e.textContent = 글; return e; };
+const NS = "http://www.w3.org/2000/svg";
+const svg = (태그, 속성 = {}) => { const e = document.createElementNS(NS, 태그); for (const k in 속성) e.setAttribute(k, 속성[k]); return e; };
+
+/* 공용 툴팁: 값이 앞, 이름이 뒤. textContent 로만 채운다 */
+const tip = document.getElementById("tip");
+function 팁보이기(ev, 제목, 줄들) {
+  tip.replaceChildren(el("div", {className: "t"}, 제목));
+  줄들.forEach(([색, 값, 이름]) => { const r = el("div", {className: "r"}); const i = el("i"); i.style.background = 색; r.append(i, el("b", {}, 값), el("span", {}, 이름)); tip.append(r); });
+  const x = Math.min(ev.clientX + 14, innerWidth - tip.offsetWidth - 8), y = Math.min(ev.clientY + 14, innerHeight - tip.offsetHeight - 8);
+  tip.style.left = x + "px"; tip.style.top = y + "px"; tip.style.opacity = 1;
+}
+const 팁숨기기 = () => tip.style.opacity = 0;
 
 function 뼈대() {
-  document.getElementById("main").innerHTML = 권역들.map(r => `
-  <section id="s-${r}">
-    <div class="card"><div class="title"><h2>${r}</h2><span class="sub" data-k="sub"></span></div><div class="kpi" data-k="kpi"></div></div>
-    <div class="card"><div class="h3"><span>노선 지도 · 역별 오차율</span><span class="seg"><button class="on" data-m="승">승차</button><button data-m="하">하차</button></span></div>
-      <div class="map" id="map-${r}"></div>
-      <div class="legend"><span><i style="background:var(--ok)"></i>±10% 안</span><span><i style="background:var(--pos)"></i>과대(+)</span><span><i style="background:var(--neg)"></i>과소(−)</span><span>원이 클수록 오차가 큼 · 범위 밖 역만 이름 표시</span></div></div>
-    <div class="card"><div class="two">
-      <div><div class="h3">범위 안 역 수</div><div data-k="cv1"></div></div>
-      <div><div class="h3">손실</div><div data-k="cv2"></div></div></div>
-      <div class="legend"><span><i style="background:var(--on)"></i>승차</span><span><i style="background:var(--off)"></i>하차</span><span>가로축: 누적 배정 횟수</span></div></div>
-    <div class="card"><div class="h3">역별 오차율 (%)</div><div data-k="bars"></div>
-      <div class="legend"><span><i style="background:var(--on)"></i>승차</span><span><i style="background:var(--off)"></i>하차</span><span>초록 띠 ±10% · ±60% 밖은 끝에서 자름</span></div></div>
-    <div class="card scroll"><table><thead><tr><th></th><th colspan="3" style="text-align:center">승차</th><th colspan="3" style="text-align:center">하차</th></tr>
-      <tr><th style="text-align:left">역</th><th>실적</th><th>배정</th><th>오차%</th><th>실적</th><th>배정</th><th>오차%</th></tr></thead><tbody data-k="tb"></tbody></table></div>
-  </section>`).join("");
-  const 어두움 = matchMedia("(prefers-color-scheme: dark)").matches;
+  const main = document.getElementById("main");
   권역들.forEach(r => {
+    const s = el("section", {id: "s-" + r});
+    s.innerHTML = `
+    <div class="card">
+      <div class="rhead"><div class="rname"><h2></h2><span class="chip" data-k="chip"></span></div><span class="state" data-k="state"><b></b><span></span></span></div>
+      <div class="hero">
+        <div class="tile"><div class="lab"><i style="background:var(--s1)"></i>승차 범위 안</div><div class="val" data-k="v승"></div><div class="strip" data-k="st승"></div><div class="strip-ends" data-k="se승"></div></div>
+        <div class="tile"><div class="lab"><i style="background:var(--s2)"></i>하차 범위 안</div><div class="val" data-k="v하"></div><div class="strip" data-k="st하"></div><div class="strip-ends" data-k="se하"></div></div>
+      </div>
+      <div class="stats"><div><span>누적 배정</span><b data-k="누적"></b></div><div><span>손실</span><b data-k="손실"></b></div><div><span>최선해 갱신</span><b data-k="최선"></b></div></div>
+    </div>
+    <div class="card">
+      <div class="ch"><h3>노선 지도</h3><span class="seg"><button class="on" data-m="승">승차</button><button data-m="하">하차</button></span></div>
+      <div class="map" id="map-${r}"></div>
+      <div class="legend"><span><i style="background:var(--mid)"></i>±10% 안</span><span><i style="background:var(--pos)"></i>과대 (+)</span><span><i style="background:var(--neg)"></i>과소 (−)</span><span>원 크기 = 오차 크기</span></div>
+    </div>
+    <div class="card">
+      <div class="ch"><h3>수렴 추이</h3><span class="chip">가로축 누적 배정</span></div>
+      <div class="pair"><div><p class="sub">범위 안 역 수</p><div class="plot" data-k="cv1"></div></div><div><p class="sub">손실</p><div class="plot" data-k="cv2"></div></div></div>
+      <div class="legend"><span><i class="ln" style="background:var(--s1)"></i>승차</span><span><i class="ln" style="background:var(--s2)"></i>하차</span><span><i class="ln" style="background:var(--ink)"></i>손실</span></div>
+    </div>
+    <div class="card">
+      <div class="ch"><h3>역별 오차율</h3><span class="chip">노선 순서 · ±60% 밖은 끝에서 자름</span></div>
+      <div class="plot" data-k="bars"></div>
+      <div class="legend"><span><i style="background:var(--mid)"></i>±10% 안</span><span><i style="background:var(--pos)"></i>과대</span><span><i style="background:var(--neg)"></i>과소</span></div>
+      <details><summary>역별 표</summary><div class="tbl"><table><thead><tr><th style="text-align:left">역</th><th>승차 실적</th><th>배정</th><th>오차%</th><th>하차 실적</th><th>배정</th><th>오차%</th></tr></thead><tbody data-k="tb"></tbody></table></div></details>
+    </div>`;
+    s.querySelector("h2").textContent = r;
+    main.append(s);
     상태[r] = {모드: "승"};
-    const s = document.getElementById("s-" + r);
     s.querySelectorAll(".seg button").forEach(b => b.onclick = () => {
       s.querySelectorAll(".seg button").forEach(x => x.classList.toggle("on", x === b));
       상태[r].모드 = b.dataset.m; 지도칠하기(r);
     });
-    if (!window.L) return;
-    const m = L.map("map-" + r, {zoomControl: false, scrollWheelZoom: false});
-    L.tileLayer(`https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_${어두움 ? "Dark" : "Light"}_Gray_Base/MapServer/tile/{z}/{y}/{x}`,
-      {maxZoom: 16, attribution: "Esri, HERE, Garmin, © OpenStreetMap"}).addTo(m);
-    L.control.zoom({position: "bottomright"}).addTo(m);
-    지도[r] = {m, 선: null, 점: []};
+    if (window.L) {
+      const m = L.map("map-" + r, {zoomControl: false, scrollWheelZoom: false, attributionControl: true});
+      const 어두움 = matchMedia("(prefers-color-scheme: dark)").matches;
+      L.tileLayer(`https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_${어두움 ? "Dark" : "Light"}_Gray_Base/MapServer/tile/{z}/{y}/{x}`,
+        {maxZoom: 16, attribution: "Esri · OSM"}).addTo(m);
+      L.control.zoom({position: "bottomright"}).addTo(m);
+      m.attributionControl.setPrefix(false);
+      지도[r] = {m, 선: [], 점: []};
+    }
   });
 }
 
 function 지도칠하기(r) {
-  const d = 상태[r].자료, g = 지도[r], 허용 = 상태.허용, 키 = 상태[r].모드;
+  const d = 상태[r].자료, g = 지도[r], 허용 = 최근 && 최근.허용, 키 = 상태[r].모드;
   if (!d || !g) return;
-  if (!g.선) {
-    g.선 = L.polyline(d.역.map(s => [s.위도, s.경도]), {color: css("--mut"), weight: 4, opacity: .45}).addTo(g.m);
-    g.m.fitBounds(g.선.getBounds(), {padding: [28, 28]});
+  if (!g.선.length) {
+    const 위치 = d.역.map(s => [s.위도, s.경도]);
+    g.선.push(L.polyline(위치, {color: css("--surface"), weight: 9, opacity: 1}).addTo(g.m));
+    g.선.push(L.polyline(위치, {color: css("--line"), weight: 4, opacity: .8, lineJoin: "round"}).addTo(g.m));
+    g.m.fitBounds(g.선[0].getBounds(), {paddingTopLeft: [36, 36], paddingBottomRight: [110, 36]});  // 오른쪽은 역 이름표 자리
   }
   g.점.forEach(x => x.remove()); g.점 = [];
-  d.역.forEach(s => {
-    const e = s[키], 반지름 = 6 + Math.min(Math.abs(e), 60) / 60 * 12;
-    const c = L.circleMarker([s.위도, s.경도], {radius: 반지름, color: css("--card"), weight: 1.5, fillColor: 색(e, 허용), fillOpacity: .9}).addTo(g.m);
-    // 범위 밖 역만 이름을 늘 띄우고, 범위 안 역은 손가락/마우스를 올리면 보인다(겹침 방지)
-    c.bindTooltip(`${s.역} ${부호(e)}%`, {permanent: Math.abs(e) > 허용, direction: "right", offset: [반지름, 0], className: "lbl"});
-    c.bindPopup(`<b>${s.역}</b><br>승차 ${수(s.실승)} → ${수(s.배승)} (${부호(s.승)}%)<br>하차 ${수(s.실하)} → ${수(s.배하)} (${부호(s.하)}%)`);
+  // 범위 안 역을 먼저, 큰 오차를 나중에 그려 위로 올린다
+  [...d.역].sort((a, b) => Math.abs(a[키]) - Math.abs(b[키])).forEach(s => {
+    const e = s[키], k = 판정(e, 허용), 밖 = k !== "in";
+    const 반지름 = 밖 ? 6 + Math.min(Math.abs(e), 60) / 60 * 10 : 5;
+    const c = L.circleMarker([s.위도, s.경도], {radius: 반지름, color: css("--surface"), weight: 2, fillColor: 판정색(k), fillOpacity: 1}).addTo(g.m);
+    const 글 = el("span"); 글.append(document.createTextNode(s.역 + " "), el("b", {}, 부호(e) + "%"));
+    c.bindTooltip(글, {permanent: 밖, direction: "right", offset: [반지름 + 2, 0], className: "lbl"});
+    const 팝 = el("div"); 팝.append(el("b", {}, s.역), el("br"),
+      document.createTextNode(`승차 ${수(s.실승)} → ${수(s.배승)} (${부호(s.승)}%)`), el("br"),
+      document.createTextNode(`하차 ${수(s.실하)} → ${수(s.배하)} (${부호(s.하)}%)`));
+    c.bindPopup(팝);
     g.점.push(c);
   });
 }
 
-function 선그래프(점들, 값들, 최대, 눈금) {
-  const x끝 = 점들[점들.length - 1][0] || 1, H = 120;
-  const 경로 = f => {
-    let p = "", 앞 = null;
-    점들.forEach(q => { const x = q[0] / x끝 * 100, y = H - f(q) / 최대 * H; p += 앞 === null ? `M${x},${y}` : `L${x},${앞}L${x},${y}`; 앞 = y; });
-    return p;
-  };
-  const 선 = 값들.map(([f, c]) => `<path d="${경로(f)}" fill="none" stroke="${c}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>`).join("");
-  const 격자 = [0, .5, 1].map(t => `<line x1="0" x2="100" y1="${t * H}" y2="${t * H}" stroke="${css("--line")}" vector-effect="non-scaling-stroke"/>`).join("");
-  const 가로 = [0, .25, .5, .75, 1].map(t => `<span style="left:${t * 100}%">${수(x끝 * t / 1000)}k</span>`).join("");
-  return `<div class="cv"><div class="yl">${눈금.map(v => `<span>${v}</span>`).join("")}</div><svg viewBox="0 0 100 ${H}" preserveAspectRatio="none" width="100%" height="${H}">${격자}${선}</svg><div class="xl">${가로}</div></div>`;
+/* 계단선 그래프 하나(축 하나). 값들: [{이름, 색, f}] */
+function 선그래프(상자, 점들, 값들, 최대, 끝라벨) {
+  const W = Math.max(200, 상자.clientWidth), H = 150, L0 = 30, R0 = 끝라벨 ? 46 : 8, T0 = 8, B0 = 22;
+  const pw = W - L0 - R0, ph = H - T0 - B0, x끝 = 점들[점들.length - 1][0] || 1;
+  const X = v => L0 + v / x끝 * pw, Y = v => T0 + ph - v / 최대 * ph;
+  const s = svg("svg", {viewBox: `0 0 ${W} ${H}`, height: H});
+  [0, .5, 1].forEach(t => {
+    const y = T0 + ph * (1 - t);
+    s.append(svg("line", {x1: L0, x2: L0 + pw, y1: y, y2: y, stroke: t === 0 ? css("--axis") : css("--grid"), "stroke-width": 1}));
+    const tx = svg("text", {x: L0 - 6, y: y + 3, "text-anchor": "end"}); tx.textContent = 수(최대 * t); s.append(tx);
+  });
+  [0, .5, 1].forEach(t => { const tx = svg("text", {x: L0 + pw * t, y: H - 6, "text-anchor": t === 0 ? "start" : t === 1 ? "end" : "middle"}); tx.textContent = 짧게(x끝 * t); s.append(tx); });
+  값들.forEach(v => {
+    let d = "", 앞 = null;
+    점들.forEach(p => { const x = X(p[0]), y = Y(v.f(p)); d += 앞 === null ? `M${x},${y}` : `L${x},${앞}L${x},${y}`; 앞 = y; });
+    if (v.면) s.append(svg("path", {d: d + `L${X(x끝)},${Y(0)}L${X(0)},${Y(0)}Z`, fill: v.색, opacity: .05}));
+    s.append(svg("path", {d, fill: "none", stroke: v.색, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round"}));
+    const 끝 = 점들[점들.length - 1];
+    s.append(svg("circle", {cx: X(끝[0]), cy: Y(v.f(끝)), r: 4, fill: v.색, stroke: css("--surface"), "stroke-width": 2}));
+    if (끝라벨) { const tx = svg("text", {x: X(끝[0]) + 8, y: Y(v.f(끝)) + 4, class: "end"}); tx.textContent = v.이름 + " " + 수(v.f(끝)); s.append(tx); }
+  });
+  // 십자선: 가장 가까운 누적 배정 위치에 붙는다
+  const 십자 = svg("line", {y1: T0, y2: T0 + ph, stroke: css("--mute"), "stroke-width": 1, opacity: 0});
+  const 판 = svg("rect", {x: L0, y: T0, width: pw, height: ph, fill: "transparent"});
+  s.append(십자, 판);
+  판.addEventListener("pointermove", ev => {
+    const b = s.getBoundingClientRect(), 값x = (ev.clientX - b.left - L0) / pw * x끝;
+    let lo = 0, hi = 점들.length - 1; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (점들[m][0] <= 값x) lo = m; else hi = m - 1; }
+    const p = 점들[lo]; 십자.setAttribute("x1", X(Math.max(0, 값x))); 십자.setAttribute("x2", X(Math.max(0, 값x))); 십자.setAttribute("opacity", .6);
+    팁보이기(ev, `누적 ${수(Math.max(0, 값x))}회`, 값들.map(v => [v.색, 수(v.f(p), v.소수 || 0), v.이름]));
+  });
+  판.addEventListener("pointerleave", () => { 십자.setAttribute("opacity", 0); 팁숨기기(); });
+  상자.replaceChildren(s);
 }
 
-function 막대그래프(역들, 허용) {
-  const 축 = 60, 줄 = 24, H = 역들.length * 줄, 띠 = 허용 / 축 * 50;
-  const 막 = (v, c, y) => { const w = Math.max(-축, Math.min(축, v)) / 축 * 50; return `<rect x="${w >= 0 ? 50 : 50 + w}%" y="${y}" width="${Math.abs(w)}%" height="7" rx="2" fill="${c}"/>`; };
-  const 몸 = 역들.map((s, k) => 막(s.승, css("--on"), k * 줄 + 4) + 막(s.하, css("--off"), k * 줄 + 13)).join("");
-  const 가로 = [-60, -30, 0, 30, 60].map(v => `<span style="left:${(v + 축) / 축 / 2 * 100}%">${v > 0 ? "+" : ""}${v}%</span>`).join("");
-  return `<div class="rows"><div>${역들.map(s => `<div class="n">${s.역}</div>`).join("")}</div>
-    <div><svg width="100%" height="${H}"><rect x="${50 - 띠}%" y="0" width="${2 * 띠}%" height="${H}" fill="${css("--band")}"/>
-    <line x1="50%" x2="50%" y1="0" y2="${H}" stroke="${css("--mut")}" stroke-width="1"/>${몸}</svg><div class="xl">${가로}</div></div></div>`;
+/* 역별 오차율: 승차 | 하차 두 판(작은 배수), 같은 역 순서·같은 축 */
+function 막대그래프(상자, 역들, 허용) {
+  const W = Math.max(300, 상자.clientWidth), 줄 = 22, 이름폭 = Math.min(118, Math.max(84, W * .2)), 틈 = 18;
+  const 판폭 = (W - 이름폭 - 틈) / 2, 축 = 60, T0 = 22, H = T0 + 역들.length * 줄 + 20;
+  const s = svg("svg", {viewBox: `0 0 ${W} ${H}`, height: H});
+  [["승", "승차", 0], ["하", "하차", 1]].forEach(([키, 이름, k]) => {
+    const x0 = 이름폭 + k * (판폭 + 틈), cx = x0 + 판폭 / 2, X = v => cx + Math.max(-축, Math.min(축, v)) / 축 * 판폭 / 2;
+    const 제목 = svg("text", {x: cx, y: 12, "text-anchor": "middle", class: "end"}); 제목.textContent = 이름; s.append(제목);
+    s.append(svg("rect", {x: X(-허용), y: T0 - 4, width: X(허용) - X(-허용), height: 역들.length * 줄 + 4, fill: css("--band"), rx: 3}));
+    [-60, -30, 0, 30, 60].forEach(v => {
+      if (v) s.append(svg("line", {x1: X(v), x2: X(v), y1: T0 - 4, y2: T0 + 역들.length * 줄, stroke: css("--grid"), "stroke-width": 1}));
+      const tx = svg("text", {x: X(v), y: H - 4, "text-anchor": v === -60 ? "start" : v === 60 ? "end" : "middle"}); tx.textContent = (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v); s.append(tx);
+    });
+    역들.forEach((st, i) => {
+      const e = st[키], kk = 판정(e, 허용), y = T0 + i * 줄 + 4, h = 줄 - 8, a = X(0), b = X(e);
+      const w = Math.max(1.5, Math.abs(b - a)), x = Math.min(a, b), r = Math.min(4, w / 2);
+      // 끝만 둥글게: 기준선 쪽은 각지게
+      const d = e >= 0 ? `M${x},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h - r}Q${x + w},${y + h} ${x + w - r},${y + h}H${x}Z`
+                       : `M${x + w},${y}H${x + r}Q${x},${y} ${x},${y + r}V${y + h - r}Q${x},${y + h} ${x + r},${y + h}H${x + w}Z`;
+      const 막 = svg("path", {d, fill: 판정색(kk)}); s.append(막);
+      if (kk !== "in") {
+        const 넘침 = Math.abs(e) > 축, tx = svg("text", {x: e > 0 ? Math.min(b + 4, x0 + 판폭 - 2) : Math.max(b - 4, x0 + 2), y: y + h - 3, "text-anchor": e > 0 ? (넘침 ? "end" : "start") : (넘침 ? "start" : "end")});
+        tx.textContent = 부호(e, 0); if (넘침) tx.setAttribute("fill", "#fff"); s.append(tx);
+      }
+      const 판 = svg("rect", {x: x0, y: T0 + i * 줄, width: 판폭, height: 줄, fill: "transparent"});
+      판.addEventListener("pointermove", ev => { 막.setAttribute("opacity", .75); 팁보이기(ev, st.역 + " · " + 이름, [[판정색(kk), 부호(e) + "%", `실적 ${수(st["실" + 키])} · 배정 ${수(st["배" + 키])}`]]); });
+      판.addEventListener("pointerleave", () => { 막.setAttribute("opacity", 1); 팁숨기기(); });
+      s.append(판);
+    });
+    s.append(svg("line", {x1: X(0), x2: X(0), y1: T0 - 4, y2: T0 + 역들.length * 줄, stroke: css("--axis"), "stroke-width": 1}));
+  });
+  역들.forEach((st, i) => { const tx = svg("text", {x: 이름폭 - 10, y: T0 + i * 줄 + 줄 / 2 + 4, "text-anchor": "end"}); tx.setAttribute("style", "font-size:12px;fill:var(--ink2)"); tx.textContent = st.역; s.append(tx); });
+  상자.replaceChildren(s);
 }
 
-const 칸 = (v, 허용) => `<td class="e ${Math.abs(v) <= 허용 ? "ok" : v > 0 ? "pos" : "neg"}">${부호(v)}</td>`;
+function 띠(상자, 끝상자, 역들, 키, 허용) {
+  상자.replaceChildren(...역들.map(st => { const k = 판정(st[키], 허용), sp = el("span", {className: k}); sp.title = `${st.역} ${부호(st[키])}%`; return sp; }));
+  끝상자.replaceChildren(el("span", {}, 역들[0].역), el("span", {}, 역들[역들.length - 1].역));
+}
 
 function 그리기(자료) {
-  상태.허용 = 자료.허용;
+  최근 = 자료;
+  const 허용 = 자료.허용;
   권역들.forEach(r => {
-    const d = 자료.권역[r], s = document.getElementById("s-" + r), n = d.역.length, 허용 = 자료.허용;
+    const d = 자료.권역[r], s = document.getElementById("s-" + r), n = d.역.length, q = k => s.querySelector(`[data-k="${k}"]`);
     상태[r].자료 = d;
-    const 승안 = d.역.filter(x => Math.abs(x.승) <= 허용).length, 하안 = d.역.filter(x => Math.abs(x.하) <= 허용).length;
-    const 카드 = (v, 라벨, 비) => `<div><b>${v}</b><span>${라벨}</span>${비 == null ? "" : `<div class="bar"><i style="width:${비 * 100}%"></i></div>`}</div>`;
-    s.querySelector('[data-k="kpi"]').innerHTML = 카드(`${승안}<small> / ${n}</small>`, "승차 범위 안", 승안 / n)
-      + 카드(`${하안}<small> / ${n}</small>`, "하차 범위 안", 하안 / n) + 카드(수(d.누적), "누적 배정") + 카드(수(d.손실, 2), "손실");
-    s.querySelector('[data-k="sub"]').textContent = (d.시각 || "").slice(5, 16) + " 최신 배정";
-    const 점 = d.점, 최대손실 = Math.max(...점.map(p => p[1]));
-    s.querySelector('[data-k="cv1"]').innerHTML = 선그래프(점, [[p => n - p[2], css("--on")], [p => n - p[3], css("--off")]], n, [n, Math.round(n / 2), 0]);
-    s.querySelector('[data-k="cv2"]').innerHTML = 선그래프(점, [[p => p[1], css("--fg")]], 최대손실, [Math.round(최대손실), Math.round(최대손실 / 2), 0]);
-    s.querySelector('[data-k="bars"]').innerHTML = 막대그래프(d.역, 허용);
-    s.querySelector('[data-k="tb"]').innerHTML = d.역.map(x => `<tr><td class="n">${x.역}</td><td>${수(x.실승)}</td><td>${수(x.배승)}</td>${칸(x.승, 허용)}<td>${수(x.실하)}</td><td>${수(x.배하)}</td>${칸(x.하, 허용)}</tr>`).join("");
+    const 안 = 키 => d.역.filter(x => Math.abs(x[키]) <= 허용).length;
+    ["승", "하"].forEach(키 => {
+      const v = q("v" + 키); v.replaceChildren(document.createTextNode(안(키)), el("small", {}, "/ " + n));
+      띠(q("st" + 키), q("se" + 키), d.역, 키, 허용);
+    });
+    q("chip").textContent = `1호선 · ${n}개 역`;
+    q("누적").textContent = 수(d.누적);
+    q("손실").textContent = 수(d.손실, 2);
+    q("최선").textContent = (d.최선시각 || "").slice(5).replace("-", "/");
+    const 지남 = d.시각 ? (Date.now() - new Date(d.시각.replace(" ", "T")).getTime()) / 60000 : 1e9;
+    const st = q("state"); st.classList.toggle("bad", 지남 > 15); st.querySelector("span").textContent = 지남 > 15 ? "멈춤" : "정산 중";
+    const 점 = d.점, 최대손실 = Math.ceil(Math.max(...점.map(p => p[1])) / 10) * 10;
+    선그래프(q("cv1"), 점, [{이름: "승차", 색: css("--s1"), f: p => n - p[2]}, {이름: "하차", 색: css("--s2"), f: p => n - p[3]}], n, true);
+    선그래프(q("cv2"), 점, [{이름: "손실", 색: css("--ink"), f: p => p[1], 면: true, 소수: 2}], 최대손실, false);
+    막대그래프(q("bars"), d.역, 허용);
+    const 칸 = v => { const td = el("td", {className: "e " + 판정(v, 허용)}, 부호(v)); return td; };
+    q("tb").replaceChildren(...d.역.map(x => { const tr = el("tr"); tr.append(el("td", {className: "n"}, x.역), el("td", {}, 수(x.실승)), el("td", {}, 수(x.배승)), 칸(x.승), el("td", {}, 수(x.실하)), el("td", {}, 수(x.배하)), 칸(x.하)); return tr; }));
     지도칠하기(r);
   });
   const 지남 = (Date.now() - new Date(자료.만든때.replace(" ", "T")).getTime()) / 60000;
-  document.getElementById("stamp").textContent = 자료.만든때.slice(0, 16) + " 기준" + (지남 > 20 ? ` · ${Math.round(지남)}분 전` : "");
-  document.getElementById("dot").classList.toggle("stale", 지남 > 20);
+  document.getElementById("stamp").textContent = (지남 > 20 ? `${Math.round(지남)}분 전 · ` : "") + 자료.만든때.slice(5, 16).replace("-", "/") + " 기준";
+  document.getElementById("live").classList.toggle("stale", 지남 > 20);
+  document.getElementById("main").classList.remove("dim");
 }
 
 async function 읽기() {
-  try { const r = await fetch("data.json?t=" + Date.now(), {cache: "no-store"}); if (r.ok) 그리기(await r.json()); } catch (e) {}
+  try {
+    const r = await fetch("data.json?t=" + Date.now(), {cache: "no-store"});
+    if (r.ok) 그리기(await r.json());
+  } catch (e) {}
 }
+let 늦춤; addEventListener("resize", () => { clearTimeout(늦춤); 늦춤 = setTimeout(() => 최근 && 그리기(최근), 150); });
 뼈대(); 읽기(); setInterval(읽기, 10000);
 </script>
 </body>
