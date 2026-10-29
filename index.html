@@ -178,15 +178,18 @@ function 뼈대() {
     const 층단추 = s.querySelector('[data-k="lay"] button');
     층단추.onclick = () => { 상태[r].커넥터 = !상태[r].커넥터; 층단추.classList.toggle("on", 상태[r].커넥터); 지도칠하기(r); };
     if (window.L) {
-      const m = L.map("map-" + r, {zoomControl: false, scrollWheelZoom: false, attributionControl: true});
+      const m = L.map("map-" + r, {zoomControl: false, scrollWheelZoom: false, attributionControl: true, zoomSnap: .25});
       const 어두움 = matchMedia("(prefers-color-scheme: dark)").matches;
       L.tileLayer(`https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_${어두움 ? "Dark" : "Light"}_Gray_Base/MapServer/tile/{z}/{y}/{x}`,
-        {maxZoom: 16, attribution: "Esri · OSM"}).addTo(m);
+        {maxZoom: 17, maxNativeZoom: 13, attribution: "Esri · OSM"}).addTo(m);  // 한국은 14단계부터 타일이 없어 13단계를 늘려 쓴다
       L.control.zoom({position: "bottomright"}).addTo(m);
       m.attributionControl.setPrefix(false);
       // 커넥터·존 중심은 노선·역 아래 층에 캔버스로 그린다(수천 개)
+      // 층 순서: 존 커넥터(380) < 존 중심(390) < 노선(400) < 승하차 커넥터(420) < 역(450)
       m.createPane("conn").style.zIndex = 380; m.createPane("zone").style.zIndex = 390;
-      지도[r] = {m, 선: [], 점: [], 그림: L.canvas({pane: "conn", padding: .3}), 존그림: L.canvas({pane: "zone", padding: .3}), 층: null, 키: ""};
+      m.createPane("c930").style.zIndex = 420; m.createPane("stn").style.zIndex = 450;
+      지도[r] = {m, 선: [], 점: [], 그림: L.canvas({pane: "conn", padding: .3}), 존그림: L.canvas({pane: "zone", padding: .3}),
+                 역그림: L.canvas({pane: "c930", padding: .3}), 층: null, 키: ""};
     }
   });
 }
@@ -198,14 +201,15 @@ function 지도칠하기(r) {
     const 위치 = d.역.map(s => [s.위도, s.경도]);
     g.선.push(L.polyline(위치, {color: css("--surface"), weight: 9, opacity: 1}).addTo(g.m));
     g.선.push(L.polyline(위치, {color: css("--line"), weight: 4, opacity: .8, lineJoin: "round"}).addTo(g.m));
-    g.m.fitBounds(g.선[0].getBounds(), {paddingTopLeft: [36, 36], paddingBottomRight: [110, 36]});  // 오른쪽은 역 이름표 자리
+    const 폭 = g.m.getSize().x, 둘레 = Math.min(36, 폭 * .08);
+    g.m.fitBounds(g.선[0].getBounds(), {paddingTopLeft: [둘레, 둘레], paddingBottomRight: [Math.min(110, 폭 * .3), 둘레]});  // 오른쪽은 역 이름표 자리
   }
   g.점.forEach(x => x.remove()); g.점 = [];
   // 범위 안 역을 먼저, 큰 오차를 나중에 그려 위로 올린다
   [...d.역].sort((a, b) => Math.abs(a[키]) - Math.abs(b[키])).forEach(s => {
     const e = s[키], k = 판정(e, 허용), 밖 = k !== "in";
     const 반지름 = 밖 ? 6 + Math.min(Math.abs(e), 60) / 60 * 10 : 5;
-    const c = L.circleMarker([s.위도, s.경도], {radius: 반지름, color: css("--surface"), weight: 2, fillColor: 판정색(k), fillOpacity: 1}).addTo(g.m);
+    const c = L.circleMarker([s.위도, s.경도], {pane: "stn", radius: 반지름, color: css("--surface"), weight: 2, fillColor: 판정색(k), fillOpacity: 1}).addTo(g.m);
     const 글 = el("span"); 글.append(document.createTextNode(s.역 + " "), el("b", {}, 부호(e) + "%"));
     c.bindTooltip(글, {permanent: 밖, direction: "right", offset: [반지름 + 2, 0], className: "lbl"});
     const 팝 = el("div"); 팝.append(el("b", {}, s.역), el("br"),
@@ -250,7 +254,7 @@ function 커넥터칠하기(r) {
     const v = 값[키][c[3]], p = 역위치[c[0]];
     if (v === undefined || !p) return;
     const t = 세기(v, 1);
-    층.addLayer(L.polyline([[c[1], c[2]], p], {renderer: g.그림, color: 역색, weight: 1.5 + 2.5 * t, opacity: .35 + .6 * t, lineCap: "round"})
+    층.addLayer(L.polyline([[c[1], c[2]], p], {renderer: g.역그림, color: 역색, weight: 1.5 + 2.5 * t, opacity: .35 + .6 * t, lineCap: "round"})
       .bindTooltip(() => 팁글(`${c[0]} ${승차 ? "승차" : "하차"} 커넥터`, v, 1), {sticky: true, className: "lbl"}));
   });
   const 면 = css("--surface"), 테 = css("--ink2");
