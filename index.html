@@ -35,9 +35,13 @@ h1{font-size:26px;line-height:1.2;letter-spacing:-.03em;margin:0;font-weight:700
 .live.stale i{background:var(--mute)}.live.stale i:after{display:none}
 @keyframes pulse{0%{transform:scale(.6);opacity:.5}100%{transform:scale(1.6);opacity:0}}
 @media (prefers-reduced-motion:reduce){.live i:after{animation:none}}
-main{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}
-@media (max-width:1080px){main{grid-template-columns:minmax(0,1fr)}}
-section{display:flex;flex-direction:column;gap:14px;min-width:0}
+/* 권역마다 한 줄: 왼쪽 40% 수치·결과, 오른쪽 60% 지도 */
+main{display:flex;flex-direction:column;gap:28px}
+section{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,3fr);grid-template-areas:"sum map" "conv map" "bars map";grid-template-rows:auto auto 1fr;gap:14px;min-width:0}
+.a-sum{grid-area:sum}.a-conv{grid-area:conv}.a-bars{grid-area:bars}
+.a-map{grid-area:map;display:flex;flex-direction:column;position:sticky;top:12px;height:calc(100vh - 24px);min-height:560px;max-height:1100px}
+.a-map .map{flex:1;height:auto}
+@media (max-width:1080px){section{grid-template-columns:minmax(0,1fr);grid-template-areas:"sum" "map" "conv" "bars";grid-template-rows:auto}.a-map{position:static;height:auto;min-height:0}.a-map .map{flex:none;height:440px}}
 .card{background:var(--surface);border:1px solid var(--ring);border-radius:16px;padding:18px 20px;box-shadow:var(--shadow);min-width:0}
 @media (max-width:700px){.card{padding:16px}}
 .rhead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
@@ -67,7 +71,7 @@ h2{font-size:22px;margin:0;letter-spacing:-.03em;font-weight:700}
 .seg button{border:0;background:none;color:var(--ink2);font:inherit;font-size:12px;font-weight:500;padding:5px 12px;border-radius:7px;cursor:pointer}
 .seg button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
 .map{height:400px;border-radius:12px;overflow:hidden;background:var(--raise);isolation:isolate}
-@media (max-width:700px){.map{height:320px}}
+@media (max-width:700px){.map,.a-map .map{height:360px}}
 .leaflet-container{font:inherit;background:var(--raise)}
 .leaflet-control-attribution{font-size:9px;background:rgba(255,255,255,.6)!important}
 .leaflet-tooltip.lbl{background:var(--surface);border:1px solid var(--ring);box-shadow:0 1px 3px rgba(0,0,0,.12);border-radius:6px;font-size:11px;color:var(--ink);padding:2px 6px;white-space:nowrap}
@@ -144,7 +148,7 @@ function 뼈대() {
   권역들.forEach(r => {
     const s = el("section", {id: "s-" + r});
     s.innerHTML = `
-    <div class="card">
+    <div class="card a-sum">
       <div class="rhead"><div class="rname"><h2></h2><span class="chip" data-k="chip"></span></div><span class="state" data-k="state"><b></b><span></span></span></div>
       <div class="hero">
         <div class="tile"><div class="lab"><i style="background:var(--s1)"></i>승차 범위 안</div><div class="val" data-k="v승"></div><div class="strip" data-k="st승"></div><div class="strip-ends" data-k="se승"></div></div>
@@ -152,18 +156,18 @@ function 뼈대() {
       </div>
       <div class="stats"><div><span>누적 배정</span><b data-k="누적"></b></div><div><span>손실</span><b data-k="손실"></b></div><div><span>최선해 갱신</span><b data-k="최선"></b></div></div>
     </div>
-    <div class="card">
+    <div class="card a-map">
       <div class="ch"><h3>노선 지도</h3><span class="tools"><span class="seg" data-k="lay"><button class="on">커넥터</button></span><span class="seg" data-k="mode"><button class="on" data-m="승">승차</button><button data-m="하">하차</button></span></span></div>
       <div class="map" id="map-${r}"></div>
       <div class="legend"><span><i style="background:var(--mid)"></i>±10% 안</span><span><i style="background:var(--pos)"></i>과대 (+)</span><span><i style="background:var(--neg)"></i>과소 (−)</span><span>원 크기 = 오차 크기</span></div>
-      <div class="legend" data-k="lg2"><span><i class="ring"></i>존 중심</span><span><i class="ln" style="background:var(--line)"></i>존 커넥터</span><span><i class="ln" data-k="lg930"></i><span data-k="lg930t"></span></span><span><i class="ln" style="background:var(--axis)"></i>행정동 경계</span><span>인지길이 = 길이 × 인지계수 · 짧을수록 진하게 · 확대하면 숫자</span></div>
+      <div class="legend" data-k="lg2"><span><i class="ring"></i>존 중심</span><span><i class="ln" style="background:var(--line)"></i>존 커넥터</span><span><i class="ln" data-k="lg930"></i><span data-k="lg930t"></span></span><span><i class="ln" style="background:repeating-linear-gradient(90deg,var(--mute) 0 4px,transparent 4px 7px)"></i>행정동 경계</span><span>인지길이 = 길이 × 인지계수 · 짧을수록 진하게 · 확대하면 숫자</span></div>
     </div>
-    <div class="card">
+    <div class="card a-conv">
       <div class="ch"><h3>수렴 추이</h3><span class="chip">가로축 누적 배정</span></div>
       <div class="pair"><div><p class="sub">범위 안 역 수</p><div class="plot" data-k="cv1"></div></div><div><p class="sub">손실</p><div class="plot" data-k="cv2"></div></div></div>
       <div class="legend"><span><i class="ln" style="background:var(--s1)"></i>승차</span><span><i class="ln" style="background:var(--s2)"></i>하차</span><span><i class="ln" style="background:var(--ink)"></i>손실</span></div>
     </div>
-    <div class="card">
+    <div class="card a-bars">
       <div class="ch"><h3>역별 오차율</h3><span class="chip">노선 순서 · ±60% 밖은 끝에서 자름</span></div>
       <div class="plot" data-k="bars"></div>
       <div class="legend"><span><i style="background:var(--mid)"></i>±10% 안</span><span><i style="background:var(--pos)"></i>과대</span><span><i style="background:var(--neg)"></i>과소</span></div>
@@ -204,8 +208,13 @@ function 지도칠하기(r) {
     const 위치 = d.역.map(s => [s.위도, s.경도]);
     g.선.push(L.polyline(위치, {color: css("--surface"), weight: 9, opacity: 1}).addTo(g.m));
     g.선.push(L.polyline(위치, {color: css("--line"), weight: 4, opacity: .8, lineJoin: "round"}).addTo(g.m));
-    const 폭 = g.m.getSize().x, 둘레 = Math.min(36, 폭 * .08);
+  }
+  // 처음 그릴 때 지도가 가려져 크기가 0이면 맞춤을 미뤘다가 보일 때 맞춘다
+  g.m.invalidateSize(false);
+  const 폭 = g.m.getSize().x, 둘레 = Math.min(36, 폭 * .08);
+  if (!g.맞춤 && 폭 > 0) {
     g.m.fitBounds(g.선[0].getBounds(), {paddingTopLeft: [둘레, 둘레], paddingBottomRight: [Math.min(110, 폭 * .3), 둘레]});  // 오른쪽은 역 이름표 자리
+    g.맞춤 = true;
   }
   g.점.forEach(x => x.remove()); g.점 = [];
   // 범위 안 역을 먼저, 큰 오차를 나중에 그려 위로 올린다
@@ -236,7 +245,7 @@ function 팁글(제목, 길이, 계수) {
 function 동칠하기(r) {
   const g = 지도[r];
   if (!g || g.동 || !동망 || !동망[r]) return;
-  g.동 = L.geoJSON(동망[r], {renderer: g.동그림, interactive: false, style: {color: css("--axis"), weight: 1, opacity: .9, fill: false}}).addTo(g.m);
+  g.동 = L.geoJSON(동망[r], {renderer: g.동그림, interactive: false, style: {color: css("--mute"), weight: 1.2, opacity: .8, dashArray: "4 3", fill: false}}).addTo(g.m);
 }
 /* 확대(14 이상)하면 화면 안 커넥터 위에 인지길이를 적는다(최대 160개) */
 function 길이글(r) {
@@ -267,7 +276,7 @@ function 커넥터칠하기(r) {
   g.키 = 열쇠;
   if (g.층) { g.층.remove(); g.층 = null; }
   g.선목록 = null;
-  if (g.동) g.동.setStyle({opacity: 상태[r].커넥터 ? .9 : 0});
+  if (g.동) g.동.setStyle({opacity: 상태[r].커넥터 ? .8 : 0});
   if (!상태[r].커넥터 || !망 || !값) { 길이글(r); return; }
   const 층 = L.layerGroup(), 선색 = css("--line"), 칸 = 승차 ? 3 : 4, 방향 = 승차 ? "출발" : "도착", 목록 = [];
   망.c999.forEach(c => {
